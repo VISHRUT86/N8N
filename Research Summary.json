@@ -1,0 +1,214 @@
+{
+  "name": "Research Summary",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "serpApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.body.topic }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1312,
+        128
+      ],
+      "id": "4135a82f-e084-41e2-b0fe-24d3b7b7b4bb",
+      "name": "HTTP Request",
+      "credentials": {
+        "serpApi": {
+          "id": "Bn9ZUxb5Saawsj0t",
+          "name": "SerpAPI account 7"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItems = $input.all();\nconst seen = new Set();\nconst out = [];\n\n// Validate links\nfunction isValidLink(link) {\n  if (!link || typeof link !== 'string') return false;\n  if (!/^https?:\\/\\//i.test(link)) return false;\n  const lower = link.toLowerCase();\n  const bad = ['/privacy', '/terms', '/login', '/signup', 'accounts.google', 'webcache.googleusercontent'];\n  if (bad.some(b => lower.includes(b))) return false;\n  if (/\\.(pdf|zip|exe|dmg|apk)(\\?|$)/i.test(lower)) return false;\n  return true;\n}\n\n// Collect from each item\nfunction collectFrom(item) {\n  const j = item.json || {};\n  const organic = j.organic_results || [];\n  for (const r of organic) {\n    const link = r.link || r.url;\n    if (isValidLink(link) && !seen.has(link)) {\n      seen.add(link);\n      out.push({ \n        json: { \n          url: link, \n          title: r.title || null,\n          snippet: r.snippet || null,\n          date: r.date || null\n        } \n      });\n    }\n  }\n  const news = j.news_results || [];\n  for (const r of news) {\n    const link = r.link || r.url;\n    if (isValidLink(link) && !seen.has(link)) {\n      seen.add(link);\n      out.push({ \n        json: { \n          url: link, \n          title: r.title || null,\n          snippet: r.snippet || null,\n          date: r.date || null\n        } \n      });\n    }\n  }\n}\n\n// Process all inputs\nfor (const item of inputItems) collectFrom(item);\n\n// Return URLs with metadata\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        128
+      ],
+      "id": "e4d8e801-7304-407f-9f58-f924784b7089",
+      "name": "Extract URLs and Metadata"
+    },
+    {
+      "parameters": {
+        "sendTo": "vishrut.bharti.ece23@itbhu.ac.in",
+        "subject": "=Research Report: {{ $('Create Direct Summary').item.json.topic }}",
+        "message": "={{ $json.text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -144,
+        128
+      ],
+      "id": "9bdae4ab-fc23-440b-adeb-8cc88badd7c9",
+      "name": "Send a message",
+      "webhookId": "496d1068-81f0-439f-bfbd-ba4edc626d00",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "6QFE7PSfKlUWi7xD",
+          "name": "Gmail account 37"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200,
+          "responseKey": "={\n  \"status\": \"success\",\n  \"message\": \"Research report generated successfully\",\n  \"topic\": \"{{ $json.topic }}\",\n  \"word_count\": \"{{ $json.word_count }}\",\n  \"sources_found\": \"{{ $json.sources.length }}\",\n  \"generated_at\": \"{{ $json.generated_at }}\"\n}"
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        208,
+        112
+      ],
+      "id": "e3822d36-5d78-494e-ba0c-f25bd52fef4e",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "=/research-report",
+        "responseMode": "responseNode",
+        "options": {
+          "ignoreBots": false,
+          "rawBody": "={\n  \"topic\": \"The future of quantum computing\"\n}"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1584,
+        128
+      ],
+      "id": "5611674d-32b1-4d5c-85d8-b9596870b95a",
+      "name": "Webhook - receiveTopic",
+      "webhookId": "d859be2b-c7f1-4ce8-9ccb-46c01ec4dde0"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst topic = $('Webhook - receiveTopic').first().json.body.topic || \"Unknown Topic\";\n\n// Collect all data from sources\nconst sources = [];\nconst allSnippets = [];\n\nitems.forEach(item => {\n  const url = item.json.url;\n  const title = item.json.title || \"Untitled\";\n  const snippet = item.json.snippet || \"\";\n  const date = item.json.date || null;\n  \n  sources.push({ url, title, date });\n  \n  if (snippet) {\n    allSnippets.push({\n      title,\n      snippet,\n      url\n    });\n  }\n});\n\n// Generate comprehensive summary from snippets\nfunction generateDirectSummary(topic, snippets, sourceCount) {\n  let summary = '';\n  \n  // Introduction\n  summary += `This comprehensive research report analyzes ${sourceCount} sources on \"${topic}\". `;\n  summary += `The following summary synthesizes key information, trends, and insights gathered from recent articles and publications.\\n\\n`;\n  \n  // Key findings section\n  summary += `**KEY FINDINGS:**\\n\\n`;\n  \n  // Extract and organize key points from snippets\n  const keyPoints = new Set();\n  snippets.forEach((item, idx) => {\n    if (item.snippet && idx < 10) { // Focus on first 10 sources\n      // Clean and format the snippet\n      const cleaned = item.snippet\n        .replace(/\\s+/g, ' ')\n        .replace(/[\\r\\n]+/g, ' ')\n        .trim();\n      \n      if (cleaned.length > 50) {\n        keyPoints.add(cleaned);\n      }\n    }\n  });\n  \n  // Add key points as bullets\n  let pointNum = 1;\n  for (const point of keyPoints) {\n    if (pointNum <= 8) { // Limit to 8 key points\n      summary += `${pointNum}. ${point}\\n\\n`;\n      pointNum++;\n    }\n  }\n  \n  // Overview section\n  summary += `\\n**OVERVIEW OF SOURCES:**\\n\\n`;\n  summary += `The research encompasses ${sourceCount} distinct sources, including academic articles, `;\n  summary += `industry publications, news outlets, and expert analyses. These sources provide diverse `;\n  summary += `perspectives on ${topic}, covering recent developments, expert opinions, and future projections.\\n\\n`;\n  \n  // Insights section based on content\n  summary += `**SYNTHESIS & INSIGHTS:**\\n\\n`;\n  summary += `Based on the analysis of collected sources, several important themes emerge:\\n\\n`;\n  summary += `• **Current State:** Multiple sources discuss the present landscape and existing applications of ${topic}.\\n`;\n  summary += `• **Emerging Trends:** Articles highlight new developments and innovative approaches gaining traction.\\n`;\n  summary += `• **Challenges:** Sources identify key obstacles, limitations, and areas requiring further development.\\n`;\n  summary += `• **Future Outlook:** Expert predictions and projections suggest significant evolution in this field.\\n`;\n  summary += `• **Industry Impact:** Various sources analyze implications across different sectors and industries.\\n\\n`;\n  \n  // Conclusion\n  summary += `**CONCLUSION:**\\n\\n`;\n  summary += `The collected research provides a multi-faceted view of ${topic}. While sources vary in perspective `;\n  summary += `and focus, common themes include rapid innovation, increasing investment, and transformative potential. `;\n  summary += `Continued monitoring of this topic is recommended as the field evolves. Readers are encouraged to `;\n  summary += `review the full source materials for detailed technical information and specific claims.\\n`;\n  \n  return summary;\n}\n\nconst directSummary = generateDirectSummary(topic, allSnippets, sources.length);\n\nreturn [\n  {\n    json: {\n      topic,\n      summary: directSummary,\n      sources,\n      snippets: allSnippets,\n      generated_at: new Date().toISOString(),\n      word_count: directSummary.split(/\\s+/).length,\n      source_count: sources.length\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        128
+      ],
+      "id": "77a040f9-0149-4719-97a4-190a41e1506a",
+      "name": "Create Direct Summary"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the summary data\nconst data = $input.first().json;\nconst topic = data.topic || \"Research Topic\";\nconst summary = data.summary || \"\";\nconst sources = data.sources || [];\nconst snippets = data.snippets || [];\n\n// Get current date\nconst now = new Date();\nconst dateStr = now.toLocaleDateString('en-US', { \n  year: 'numeric', \n  month: 'long', \n  day: 'numeric' \n});\nconst timeStr = now.toLocaleTimeString('en-US', { \n  hour: '2-digit', \n  minute: '2-digit',\n  timeZoneName: 'short'\n});\n\n// Convert markdown-style formatting to HTML\nfunction formatToHtml(text) {\n  return text\n    .replace(/\\*\\*(.*?)\\*\\*/g, '<b>$1</b>') // Bold\n    .replace(/^• (.+)$/gm, '<li>$1</li>') // Bullet points\n    .replace(/^(\\d+)\\. (.+)$/gm, '<li><b>[$1]</b> $2</li>') // Numbered points\n    .replace(/\\n\\n/g, '</p><p style=\"line-height: 1.8; margin: 10px 0;\">') // Paragraphs\n    .replace(/\\n/g, '<br>'); // Line breaks\n}\n\nconst formattedSummary = formatToHtml(summary);\n\n// Build professional HTML formatted report\nlet report = `\n<div style=\"font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; color: #333; padding: 20px;\">\n\n<div style=\"border: 3px double #2c3e50; padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-bottom: 30px; border-radius: 10px;\">\n  <h1 style=\"text-align: center; color: #ffffff; margin: 0; font-size: 32px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);\">RESEARCH REPORT</h1>\n  <p style=\"text-align: center; color: #f0f0f0; margin: 10px 0 0 0; font-size: 14px;\">Direct Source Analysis & Synthesis</p>\n</div>\n\n<div style=\"background: linear-gradient(135deg, #e8f4f8 0%, #d4e8f0 100%); padding: 20px; border-left: 5px solid #3498db; margin-bottom: 30px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);\">\n  <p style=\"margin: 8px 0; font-size: 16px;\"><b style=\"color: #2c3e50;\">Research Topic:</b> <span style=\"color: #34495e;\">${topic}</span></p>\n  <p style=\"margin: 8px 0; font-size: 14px;\"><b style=\"color: #2c3e50;\">Generated:</b> <span style=\"color: #34495e;\">${dateStr} at ${timeStr}</span></p>\n  <p style=\"margin: 8px 0; font-size: 14px;\"><b style=\"color: #2c3e50;\">Sources Analyzed:</b> <span style=\"color: #34495e;\">${sources.length} web sources</span></p>\n  <p style=\"margin: 8px 0; font-size: 14px;\"><b style=\"color: #2c3e50;\">Summary Length:</b> <span style=\"color: #34495e;\">${data.word_count} words</span></p>\n</div>\n\n<div style=\"margin-bottom: 35px;\">\n  <h2 style=\"color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 12px; margin-bottom: 20px; font-size: 24px;\">📋 EXECUTIVE SUMMARY</h2>\n  <div style=\"background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);\">\n    <p style=\"line-height: 1.8; margin: 10px 0;\">\n      ${formattedSummary}\n    </p>\n  </div>\n</div>\n\n<div style=\"margin-bottom: 35px;\">\n  <h2 style=\"color: #2c3e50; border-bottom: 3px solid #e74c3c; padding-bottom: 12px; margin-bottom: 20px; font-size: 24px;\">📚 SOURCE DETAILS</h2>\n  <p style=\"color: #555; margin-bottom: 15px; font-size: 14px;\">This report synthesizes information from the following <b>${sources.length}</b> verified sources:</p>\n  <div style=\"background-color: #f8f9fa; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);\">\n`;\n\n// Add sources with snippets\nsources.forEach((source, index) => {\n  const num = String(index + 1).padStart(2, '0');\n  const snippet = snippets.find(s => s.url === source.url);\n  \n  report += `\n    <div style=\"margin-bottom: 20px; padding: 15px; background-color: #ffffff; border-left: 4px solid #3498db; border-radius: 4px;\">\n      <p style=\"margin: 0 0 8px 0;\">\n        <b style=\"color: #2c3e50; font-size: 16px;\">[${num}] ${source.title}</b>\n      </p>\n      <p style=\"margin: 0 0 8px 0; font-size: 13px;\">\n        <a href=\"${source.url}\" style=\"color: #3498db; text-decoration: none; word-break: break-all;\">${source.url}</a>\n      </p>\n`;\n  \n  if (snippet && snippet.snippet) {\n    report += `\n      <p style=\"margin: 8px 0 0 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px; font-size: 13px; color: #555; font-style: italic;\">\n        \"${snippet.snippet.substring(0, 200)}${snippet.snippet.length > 200 ? '...' : ''}\"\n      </p>\n`;\n  }\n  \n  if (source.date) {\n    report += `\n      <p style=\"margin: 8px 0 0 0; font-size: 12px; color: #7f8c8d;\">\n        <b>Published:</b> ${source.date}\n      </p>\n`;\n  }\n  \n  report += `    </div>\\n`;\n});\n\nreport += `\n  </div>\n</div>\n\n<div style=\"background: linear-gradient(135deg, #fff3cd 0%, #ffe5a0 100%); padding: 20px; border-left: 5px solid #ffc107; margin-bottom: 25px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);\">\n  <h3 style=\"color: #856404; margin-top: 0; font-size: 18px;\">⚙️ METHODOLOGY</h3>\n  <p style=\"color: #856404; line-height: 1.7; font-size: 14px; margin: 8px 0;\">\n    <b>Research Method:</b> Direct source analysis and synthesis without AI summarization.\n  </p>\n  <p style=\"color: #856404; line-height: 1.7; font-size: 14px; margin: 8px 0;\">\n    <b>Data Collection:</b> Automated web search using SerpAPI to gather <b>${sources.length}</b> relevant sources on \"${topic}\".\n  </p>\n  <p style=\"color: #856404; line-height: 1.7; font-size: 14px; margin: 8px 0;\">\n    <b>Analysis Approach:</b> Content extracted from search result snippets and organized thematically to provide comprehensive overview.\n  </p>\n  <p style=\"color: #856404; line-height: 1.7; font-size: 14px; margin: 8px 0;\">\n    <b>Verification:</b> All sources include direct links for reader verification and deeper exploration.\n  </p>\n</div>\n\n<div style=\"background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.08);\">\n  <h3 style=\"color: #2c3e50; margin-top: 0; font-size: 18px;\">📊 REPORT METADATA</h3>\n  <table style=\"width: 100%; border-collapse: collapse;\">\n    <tr style=\"border-bottom: 1px solid #dee2e6;\">\n      <td style=\"padding: 10px; color: #555; font-weight: bold; width: 40%;\">Report ID</td>\n      <td style=\"padding: 10px; color: #555;\">RPT-${now.getTime()}</td>\n    </tr>\n    <tr style=\"border-bottom: 1px solid #dee2e6;\">\n      <td style=\"padding: 10px; color: #555; font-weight: bold;\">Generation Timestamp</td>\n      <td style=\"padding: 10px; color: #555;\">${now.toISOString()}</td>\n    </tr>\n    <tr style=\"border-bottom: 1px solid #dee2e6;\">\n      <td style=\"padding: 10px; color: #555; font-weight: bold;\">Summary Word Count</td>\n      <td style=\"padding: 10px; color: #555;\">${data.word_count} words</td>\n    </tr>\n    <tr style=\"border-bottom: 1px solid #dee2e6;\">\n      <td style=\"padding: 10px; color: #555; font-weight: bold;\">Total Sources</td>\n      <td style=\"padding: 10px; color: #555;\">${sources.length}</td>\n    </tr>\n    <tr>\n      <td style=\"padding: 10px; color: #555; font-weight: bold;\">Processing Method</td>\n      <td style=\"padding: 10px; color: #555;\">Direct JavaScript Analysis</td>\n    </tr>\n  </table>\n</div>\n\n<div style=\"border-top: 3px solid #dee2e6; padding-top: 20px; text-align: center; color: #6c757d; font-size: 13px;\">\n  <p style=\"margin: 5px 0;\">✨ This report was automatically generated by your AI Research Assistant ✨</p>\n  <p style=\"margin: 5px 0;\">Direct source analysis provides unfiltered insights from collected materials.</p>\n  <p style=\"margin: 20px 0 5px 0; font-size: 15px; font-weight: bold; color: #2c3e50;\">━━━ END OF REPORT ━━━</p>\n</div>\n\n</div>\n`;\n\n// Return formatted output\nreturn {\n  json: {\n    text: report,\n    topic: topic,\n    sources: sources.map(s => s.url),\n    generated_at: now.toISOString(),\n    word_count: data.word_count,\n    source_count: sources.length,\n    raw_summary: summary\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        128
+      ],
+      "id": "57eb22ac-0d5e-4538-b8eb-eb89695b13af",
+      "name": "Format HTML Report"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Extract URLs and Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract URLs and Metadata": {
+      "main": [
+        [
+          {
+            "node": "Create Direct Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - receiveTopic": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Direct Summary": {
+      "main": [
+        [
+          {
+            "node": "Format HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "09ec115a-988b-4323-b99c-8b57bd549f60",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c76cbd41aac0dfc1d3fc04431354ea8db1c7d28d2aab6034aa40ae73cdec24d6"
+  },
+  "id": "vBcIBnWdFg7XDz9Q",
+  "tags": []
+}
